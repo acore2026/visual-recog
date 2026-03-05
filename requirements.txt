@@ -1,2 +1,8 @@
+# Core dependencies
 aiohttp>=3.9.0
 aiortc>=1.8.0
+
+# Object detection dependencies (optional for gesture mode)
+numpy>=1.24.0
+opencv-python>=4.8.0
+onnxruntime>=1.16.0

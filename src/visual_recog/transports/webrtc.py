@@ -2,10 +2,35 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from dataclasses import dataclass
 
 from aiohttp import web
 from aiortc import RTCPeerConnection, RTCSessionDescription
+
+logger = logging.getLogger(__name__)
+
+# 延迟导入的可选依赖
+_cv2 = None
+_np = None
+
+
+def _get_cv2():
+    """延迟导入 cv2"""
+    global _cv2
+    if _cv2 is None:
+        import cv2 as cv2_lib
+        _cv2 = cv2_lib
+    return _cv2
+
+
+def _get_np():
+    """延迟导入 numpy"""
+    global _np
+    if _np is None:
+        import numpy as np_lib
+        _np = np_lib
+    return _np
 
 
 @dataclass(slots=True)
@@ -16,7 +41,7 @@ class InboundFrame:
 
 class WebRTCIngress:
     """
-    Minimal WebRTC receiver.
+    WebRTC接收器 - 接收视频流并输出JPEG编码的帧。
     Signaling endpoint: POST /offer with JSON {"sdp": "...", "type": "offer"}.
     """
 
@@ -41,20 +66,30 @@ class WebRTCIngress:
                 return
 
             async def recv_video() -> None:
+                frame_count = 0
+                cv2 = _get_cv2()
                 while True:
                     try:
                         frame = await track.recv()
+                        frame_count += 1
                     except Exception:
                         break
-                    # Keep representation generic: textual metadata + raw plane bytes.
-                    plane = frame.planes[0]
-                    raw = bytes(plane)
-                    header = f"{frame.width}x{frame.height}:{frame.format.name}|".encode(
-                        "utf-8"
-                    )
-                    self.queue.put_nowait(
-                        InboundFrame(stream_id=stream_id, payload=header + raw)
-                    )
+
+                    # 将帧转换为BGR格式的numpy数组
+                    try:
+                        img = frame.to_ndarray(format="bgr24")
+                        # 编码为JPEG
+                        success, encoded = cv2.imencode(".jpg", img)
+                        if success:
+                            self.queue.put_nowait(
+                                InboundFrame(stream_id=stream_id, payload=encoded.tobytes())
+                            )
+                            if frame_count % 30 == 0:
+                                logger.debug(f"Received {frame_count} frames from {stream_id}")
+                        else:
+                            logger.warning("Failed to encode frame to JPEG")
+                    except Exception as e:
+                        logger.warning(f"Frame processing error: {e}")
 
             asyncio.create_task(recv_video())
 
