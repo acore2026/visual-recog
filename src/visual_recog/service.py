@@ -6,7 +6,7 @@ import logging
 import signal
 from typing import Any
 
-from .clients import ClientBusyError, GestureRecognitionClient, ObjectRecognitionClient
+from .clients import ClientBusyError, GestureRecognitionClient, ObjectRecognitionClient, PassthroughClient
 from .config import AppConfig
 from .downstream import UDPSender, WebSocketSender, HTTPMJPEGSender
 from .transports import UDPIngress
@@ -14,11 +14,13 @@ from .transports import UDPIngress
 logger = logging.getLogger(__name__)
 
 
-def _build_client(mode: str) -> ObjectRecognitionClient | GestureRecognitionClient:
+def _build_client(mode: str) -> ObjectRecognitionClient | GestureRecognitionClient | PassthroughClient:
     if mode == "object":
         return ObjectRecognitionClient()
     if mode == "gesture":
         return GestureRecognitionClient()
+    if mode == "passthrough":
+        return PassthroughClient()
     raise ValueError(f"unsupported mode: {mode}")
 
 
@@ -67,18 +69,41 @@ async def _run_pipeline(config: AppConfig) -> None:
     )
 
     try:
+        frame_count = 0
+        last_log_time = 0
+        import time
+
         while not stop_event.is_set():
             try:
                 item = await asyncio.wait_for(ingress.queue.get(), timeout=0.5)
             except asyncio.TimeoutError:
                 continue
+
+            frame_count += 1
+            now = time.time()
+
+            # 定期输出管道统计
+            if now - last_log_time > 5:
+                logger.info(f"Pipeline stats: {frame_count} frames received from ingress")
+                last_log_time = now
+
             try:
                 output = await client.process(item.stream_id, item.payload)
             except ClientBusyError as exc:
                 logger.warning("%s", exc)
                 continue
+            except Exception as exc:
+                logger.error(f"Client processing error: {exc}")
+                continue
+
             if output:
-                await sender.send(output)
+                try:
+                    await sender.send(output)
+                    logger.debug(f"Frame sent to downstream: {len(output)} bytes")
+                except Exception as exc:
+                    logger.error(f"Failed to send to downstream: {exc}")
+            else:
+                logger.debug("Client returned no output")
     finally:
         await ingress.stop()
         await sender.stop()

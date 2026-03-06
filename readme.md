@@ -80,6 +80,23 @@ visual-recog \
   --downstream-port 9100
 ```
 
+5. **透传模式（用于调试）**
+```bash
+visual-recog \
+  --mode passthrough \
+  --protocol udp \
+  --listen-host 0.0.0.0 \
+  --listen-port 9000 \
+  --downstream-protocol websocket \
+  --downstream-host 0.0.0.0 \
+  --downstream-port 8765
+```
+
+透传模式会：
+- 原样转发收到的视频流，不做任何处理
+- 输出详细的收发统计日志
+- 用于排查网络连通性问题
+
 ## 下游输出协议说明
 
 服务支持三种下游输出协议，通过 `--downstream-protocol` 参数指定：

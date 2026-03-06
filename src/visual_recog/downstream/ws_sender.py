@@ -246,13 +246,24 @@ class WebSocketSender:
 
     async def _broadcast_loop(self) -> None:
         """广播循环，将队列中的帧发送给所有客户端"""
+        frame_count = 0
+        last_log_time = 0
+        import time
+
         while self._running:
             try:
                 frame = await asyncio.wait_for(self._queue.get(), timeout=0.5)
             except asyncio.TimeoutError:
                 continue
 
+            frame_count += 1
+
+            # 如果没有客户端连接，输出提示
             if not self._clients:
+                now = time.time()
+                if now - last_log_time > 5:
+                    logger.warning(f"No WebSocket clients connected. Frame {frame_count} queued but not sent.")
+                    last_log_time = now
                 continue
 
             # 发送给所有客户端
@@ -267,3 +278,9 @@ class WebSocketSender:
             for writer in disconnected:
                 self._clients.discard(writer)
                 writer.close()
+
+            # 定期输出统计
+            now = time.time()
+            if now - last_log_time > 5:
+                logger.info(f"WebSocket broadcast: {frame_count} frames sent to {len(self._clients)} clients")
+                last_log_time = now

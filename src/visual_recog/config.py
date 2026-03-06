@@ -21,9 +21,9 @@ def parse_args() -> AppConfig:
     )
     parser.add_argument(
         "--mode",
-        choices=["object", "gesture"],
+        choices=["object", "gesture", "passthrough"],
         required=True,
-        help="运行模式：object=物体识别, gesture=手势识别",
+        help="运行模式：object=物体识别, gesture=手势识别, passthrough=透传模式（仅转发，用于调试）",
     )
     parser.add_argument(
         "--protocol",
