@@ -8,7 +8,7 @@ from typing import Any
 
 from .clients import ClientBusyError, GestureRecognitionClient, ObjectRecognitionClient
 from .config import AppConfig
-from .downstream import UDPSender
+from .downstream import UDPSender, WebSocketSender, HTTPMJPEGSender
 from .transports import UDPIngress
 
 logger = logging.getLogger(__name__)
@@ -22,9 +22,19 @@ def _build_client(mode: str) -> ObjectRecognitionClient | GestureRecognitionClie
     raise ValueError(f"unsupported mode: {mode}")
 
 
+def _build_sender(config: AppConfig) -> UDPSender | WebSocketSender | HTTPMJPEGSender:
+    if config.downstream_protocol == "udp":
+        return UDPSender(config.downstream_host, config.downstream_port)
+    if config.downstream_protocol == "websocket":
+        return WebSocketSender(config.downstream_host, config.downstream_port)
+    if config.downstream_protocol == "http-mjpeg":
+        return HTTPMJPEGSender(config.downstream_host, config.downstream_port)
+    raise ValueError(f"unsupported downstream protocol: {config.downstream_protocol}")
+
+
 async def _run_pipeline(config: AppConfig) -> None:
     client = _build_client(config.mode)
-    sender = UDPSender(config.downstream_host, config.downstream_port)
+    sender = _build_sender(config)
     if config.protocol == "udp":
         ingress: Any = UDPIngress(config.listen_host, config.listen_port)
     else:
@@ -46,13 +56,14 @@ async def _run_pipeline(config: AppConfig) -> None:
     await ingress.start()
     await sender.start()
     logger.info(
-        "service started: mode=%s protocol=%s listen=%s:%s downstream=%s:%s",
+        "service started: mode=%s protocol=%s listen=%s:%s downstream=%s:%s (%s)",
         config.mode,
         config.protocol,
         config.listen_host,
         config.listen_port,
         config.downstream_host,
         config.downstream_port,
+        config.downstream_protocol,
     )
 
     try:

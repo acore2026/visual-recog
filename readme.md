@@ -29,7 +29,9 @@
         │   └── object_client.py
         ├── config.py
         ├── downstream
-        │   └── udp_sender.py
+        │   ├── udp_sender.py
+        │   ├── ws_sender.py
+        │   └── http_mjpeg_sender.py
         ├── main.py
         ├── service.py
         └── transports
@@ -43,18 +45,31 @@
 python3 -m pip install -e .
 ```
 
-2. UDP 输入 + 物体识别模式
+2. UDP 输入 + 物体识别模式 + WebSocket 输出（浏览器可直接连接）
 ```bash
 visual-recog \
   --mode object \
   --protocol udp \
   --listen-host 0.0.0.0 \
   --listen-port 9000 \
-  --downstream-host 127.0.0.1 \
-  --downstream-port 9100
+  --downstream-protocol websocket \
+  --downstream-host 0.0.0.0 \
+  --downstream-port 8765
 ```
 
-3. WebRTC 输入 + 手势识别模式
+3. UDP 输入 + 物体识别模式 + HTTP MJPEG 输出（浏览器 `<img>` 标签直接显示）
+```bash
+visual-recog \
+  --mode object \
+  --protocol udp \
+  --listen-host 0.0.0.0 \
+  --listen-port 9000 \
+  --downstream-protocol http-mjpeg \
+  --downstream-host 0.0.0.0 \
+  --downstream-port 8080
+```
+
+4. WebRTC 输入 + 手势识别模式
 ```bash
 visual-recog \
   --mode gesture \
@@ -64,6 +79,39 @@ visual-recog \
   --downstream-host 127.0.0.1 \
   --downstream-port 9100
 ```
+
+## 下游输出协议说明
+
+服务支持三种下游输出协议，通过 `--downstream-protocol` 参数指定：
+
+| 协议 | 说明 | 适用场景 |
+|------|------|----------|
+| `udp` | 原始 UDP 发送 JPEG 帧 | 传统下游设备、局域网传输 |
+| `websocket` | WebSocket 服务器，支持多客户端 | Web 前端、PWA、移动 App |
+| `http-mjpeg` | HTTP MJPEG 流 | 浏览器 `<img>` 标签直接显示 |
+
+### WebSocket 输出
+```bash
+visual-recog --downstream-protocol websocket --downstream-port 8765
+```
+- 支持多客户端同时观看
+- 浏览器使用 `new WebSocket('ws://host:8765')` 连接
+- 二进制帧格式：JPEG 图像数据
+
+### HTTP MJPEG 输出
+```bash
+visual-recog --downstream-protocol http-mjpeg --downstream-port 8080
+```
+- 浏览器直接用 `<img src="http://host:8080/mjpeg">` 显示
+- 支持多客户端
+- 跨域支持（CORS 已启用）
+
+### UDP 输出（默认）
+```bash
+visual-recog --downstream-protocol udp --downstream-port 9100
+```
+- 单播 UDP 发送
+- 适合传统下游设备接收
 
 ## 当前实现说明
 - `object` 模式：使用 YOLO ONNX 模型进行物体检测，在每帧上绘制检测框后输出到下游。
