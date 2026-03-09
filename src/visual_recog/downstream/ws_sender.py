@@ -268,16 +268,21 @@ class WebSocketSender:
 
             # 发送给所有客户端
             disconnected = set()
-            for writer in self._clients:
+            for writer in list(self._clients):  # 使用list复制避免修改集合
                 try:
                     await self._send_ws_frame(writer, 0x2, frame)  # 0x2 = binary
-                except Exception:
+                    logger.debug(f"Frame sent to client, size={len(frame)} bytes")
+                except Exception as e:
+                    logger.debug(f"Failed to send frame to client: {e}")
                     disconnected.add(writer)
 
             # 清理断开的连接
             for writer in disconnected:
                 self._clients.discard(writer)
-                writer.close()
+                try:
+                    writer.close()
+                except Exception:
+                    pass
 
             # 定期输出统计
             now = time.time()
