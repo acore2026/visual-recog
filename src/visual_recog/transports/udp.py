@@ -23,16 +23,22 @@ class _UDPIngressProtocol(asyncio.DatagramProtocol):
         self._packet_count += 1
         stream_id = f"udp://{addr[0]}:{addr[1]}"
 
-        # 每收到100个包或每5秒输出一次日志
+        # 检查是否是 JPEG
+        is_jpeg = len(data) >= 3 and data[0] == 0xFF and data[1] == 0xD8 and data[2] == 0xFF
+        header_hex = data[:20].hex()
+
         import time
         now = time.time()
+
+        # 每个包都记录（临时调试）
+        logger.info(f"[UDP] Packet #{self._packet_count} from {addr[0]}:{addr[1]}, size={len(data)}, is_jpeg={is_jpeg}, header={header_hex}")
+
         if self._packet_count == 1:
             logger.info(f"First UDP packet received from {addr[0]}:{addr[1]}, size={len(data)} bytes")
         elif self._packet_count % 100 == 0 or (now - self._last_log_time) > 5:
             logger.info(f"UDP packets received: {self._packet_count}, last from {addr[0]}:{addr[1]}, size={len(data)} bytes")
             self._last_log_time = now
 
-        logger.debug(f"UDP packet #{self._packet_count} from {addr[0]}:{addr[1]}, size={len(data)} bytes")
         self.queue.put_nowait(InboundPacket(stream_id=stream_id, payload=data))
 
 
