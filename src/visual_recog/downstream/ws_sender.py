@@ -226,6 +226,11 @@ class WebSocketSender:
         else:
             header = bytes([0x80 | opcode, 127]) + length.to_bytes(8, 'big')
 
+        # Debug: log first few bytes of data
+        data_preview = data[:20].hex()
+        is_jpeg = len(data) >= 3 and data[0] == 0xFF and data[1] == 0xD8 and data[2] == 0xFF
+        logger.info(f"[WebSocket] Sending frame: opcode={opcode}, length={length}, is_jpeg={is_jpeg}, header={data_preview}")
+
         writer.write(header + data)
         await writer.drain()
 
